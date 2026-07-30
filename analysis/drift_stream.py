@@ -37,7 +37,9 @@ class DriftStream:
     """
 
     def __init__(self, n_features=8, window_size=500, n_windows=40,
-                 covariate_rate=0.0, concept_rate=0.0, noise=0.25, seed=0):
+                 covariate_rate=0.0, concept_rate=0.0, noise=0.25, seed=0,
+                 coupled=False):
+        self.coupled = coupled
         self.p = n_features
         self.window_size = window_size
         self.n_windows = n_windows
@@ -53,8 +55,19 @@ class DriftStream:
         self.direction = d / np.linalg.norm(d)
 
     def beta_at(self, t):
-        """True coefficients at window t — the boundary the model chases."""
-        theta = self.concept_rate * t
+        """True coefficients at window t — the boundary the model chases.
+
+        With `coupled=True` the boundary moves as a function of the same
+        process that moves the FEATURES, rather than on its own clock.
+        That is the ELEC2 situation: its label is "did price rise against
+        a trailing average" while price is itself a monitored feature, so
+        feature drift and concept drift are the same event. A detector
+        watching features can time that; it cannot time an independent
+        rotation.
+        """
+        drive = (self.mean_at(t).sum() if self.coupled
+                 else self.concept_rate * t)
+        theta = drive * (self.concept_rate if self.coupled else 1.0)
         b = np.cos(theta) * self.beta0 + np.sin(theta) * self.direction
         return b / np.linalg.norm(b)
 
@@ -95,4 +108,7 @@ REGIMES = {
     "both": dict(covariate_rate=0.06, concept_rate=0.045),
     # nothing moves -> a control; every policy should tie
     "stationary": dict(covariate_rate=0.0, concept_rate=0.0),
+    # the ELEC2 situation: the boundary moves BECAUSE the features move,
+    # so a feature detector can time the concept change
+    "coupled": dict(covariate_rate=0.06, concept_rate=0.30, coupled=True),
 }

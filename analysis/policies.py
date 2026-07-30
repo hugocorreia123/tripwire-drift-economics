@@ -30,9 +30,16 @@ on data it has already seen.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy import stats
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+
+# 5000-row windows exceed scipy's exact KS threshold; the asymptotic
+# result is what we want and the warning is pure noise.
+warnings.filterwarnings("ignore", message=".*ks_2samp.*")
 
 
 # ----------------------------------------------------------- detectors
@@ -65,7 +72,28 @@ def _fit(X, y):
 
 
 def _score(model, X, y):
-    return float((model.predict(X) == y).mean())
+    """AUC, not accuracy.
+
+    With a 74% base rate, accuracy cannot separate "the model has no
+    signal" from "the model has signal and it is stable" — and that
+    distinction is the whole experiment. AUC is invariant to the base
+    rate and reads 0.5 when a model is worthless, which makes a null
+    run announce itself.
+    """
+    if len(np.unique(y)) < 2:
+        return float("nan")
+    return float(roc_auc_score(y, model.predict_proba(X)[:, 1]))
+
+
+def majority_baseline(windows):
+    """What always predicting the majority class would score, on
+    accuracy. Reported alongside so a model that beats nothing is
+    visible immediately."""
+    accs = []
+    for X, y in windows[1:]:
+        p = y.mean()
+        accs.append(max(p, 1 - p))
+    return float(np.mean(accs))
 
 
 def run_policy(windows, policy, k=5, detector="ks", threshold=None,
