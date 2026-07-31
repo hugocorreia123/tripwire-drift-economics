@@ -85,6 +85,31 @@ def _score(model, X, y):
     return float(roc_auc_score(y, model.predict_proba(X)[:, 1]))
 
 
+def persistence_auc(windows):
+    """AUC of the dumbest possible predictor: last observed label.
+
+    This exists because the usability gate turned out to correlate with
+    autocorrelation at r = +0.78 across the streams tested. When labels
+    are sticky, a stale model falls out of step with the CURRENT REGIME
+    and appears to decay, and any detector that fires on distributional
+    change will track that regime. Apparent drift value would then be
+    momentum, not concept.
+
+    If this reference approaches what the retraining policies achieve,
+    the stream is not testing what the experiment claims to test.
+    """
+    scores, labels = [], []
+    prev = windows[0][1][-1]
+    for X, y in windows[1:]:
+        for yi in y:
+            scores.append(float(prev))
+            labels.append(int(yi))
+            prev = yi
+    if len(set(labels)) < 2:
+        return float("nan")
+    return float(roc_auc_score(labels, scores))
+
+
 def majority_baseline(windows):
     """What always predicting the majority class would score, on
     accuracy. Reported alongside so a model that beats nothing is

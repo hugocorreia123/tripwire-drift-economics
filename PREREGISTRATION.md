@@ -89,6 +89,49 @@ suitable for drift research, independent of anything this test concludes.
 
 ---
 
+## Threat discovered at the gating stage, before any confirmatory data
+
+Running the usability gates over nine streams exposed a confound the design
+did not anticipate. Persistence and retraining gain correlate at **r = +0.78**:
+
+| stream | persistence | retrain gain | verdict |
+|---|---|---|---|
+| nomao | 0.948 | +0.1855 | excluded, too autocorrelated |
+| gas-drift | 0.863 | +0.0437 | **usable** |
+| electricity | 0.853 | +0.1956 | **usable** |
+| bank-marketing | 0.843 | +0.0693 | **usable** |
+| covertype | 0.798 | +0.1324 | **usable** |
+| shuttle | 0.664 | −0.0002 | excluded, no degradation |
+| airlines | 0.546 | −0.0047 | excluded, no degradation |
+| poker | 0.498 | +0.0030 | excluded, no degradation |
+
+Every stream that passed sits between 0.80 and 0.87. Every stream excluded for
+not degrading sits below 0.67. **The degradation gate appears to select for
+autocorrelation.**
+
+The mechanism is plausible and damaging. When labels are sticky, a stale model
+drifts out of step with the current regime and looks like it is decaying, while
+any detector firing on distributional change will track that regime. Under that
+account, a PSI advantage would be momentum rather than concept drift — and the
+gate would be recruiting precisely the streams where the artefact lives.
+
+**Mitigation, added before the confirmatory run.** Every comparison now reports
+a persistence reference: the AUC of predicting the previous label, which learns
+nothing. Verified to read 0.50 on a stream with independent labels and 0.90 on
+one with 90% stickiness.
+
+**Additional decision rule, fixed now.** If the persistence reference is within
+0.02 AUC of the best retraining policy on a confirmatory dataset, that dataset
+is **momentum-driven and excluded from the confirmatory set**, whatever its
+C − B. If that leaves fewer than two datasets, the confirmatory test does not
+run, per the stop condition above.
+
+This threat was found at the gating stage. No confirmatory grid has been run,
+and no C − B value on `gas-drift` or `bank-marketing` has been computed or
+inspected.
+
+---
+
 ## What this cannot establish
 
 Whether PSI's advantage, if it survives, reflects better drift timing or

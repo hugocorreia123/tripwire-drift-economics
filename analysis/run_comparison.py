@@ -37,9 +37,10 @@ def real(path):
     Only one 'seed' exists — the data — so the seed-level error bar is
     replaced by a note, not silently omitted."""
     from analysis.real_stream import load_windows
-    from analysis.policies import majority_baseline
+    from analysis.policies import majority_baseline, persistence_auc
     w = load_windows(path)
     base = majority_baseline(w)
+    pers = persistence_auc(w)
     a, _ = run_policy(w, "never")
     b, rb = run_policy(w, "scheduled", k=K)
     thr = calibrate_threshold(w, "ks", 1.0 / K)
@@ -54,6 +55,8 @@ def real(path):
     print(f"real data: {len(w)} windows, {len(w[0][0])} rows each")
     print(f"majority-class accuracy would be {base:.4f}; scores below "
           f"are AUC (0.5 = worthless)")
+    print(f"{'P persistence':>16} {pers:.4f}   <- predicts the last label, "
+          f"learns nothing")
     print(f"{'A never':>16} {a:.4f}")
     print(f"{'B scheduled':>16} {b:.4f}   ({rb} retrains, k={K})")
     print(f"{'C triggered':>16} {c:.4f}   ({rc} retrains, "
@@ -64,6 +67,11 @@ def real(path):
     print(f"  C - B (rate-matched)   = {c-b2:+.4f}"
           + ("   <- use this one" if rb2 == rc else
              f"   <- {rc} vs {rb2} retrains, still off by {abs(rc-rb2)}"))
+    if not (pers != pers) and pers > max(a, b, c) - 0.02:
+        print("\n  *** The persistence reference matches or beats every")
+        print("  *** retraining policy. This stream's structure is MOMENTUM,")
+        print("  *** not concept drift, and any apparent advantage for the")
+        print("  *** detector is an artefact of label stickiness.")
     if max(a, b, c) < 0.58:
         print("\n  *** AUC is near 0.5: the model has almost no predictive")
         print("  *** power on this task, so there is nothing for drift to")
