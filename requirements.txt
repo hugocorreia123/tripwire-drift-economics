@@ -1,11 +1,12 @@
 # Tripwire dependencies.
 #
 # Unlike Tolerance — whose statistics are pure standard library — this
-# project trains real models over a data stream, so the numeric stack
-# is genuinely required rather than optional.
+# project trains real models over a data stream, so the numeric stack is
+# genuinely required rather than optional.
 
 numpy>=1.24
 scipy>=1.11          # KS two-sample test for the drift detector
-scikit-learn>=1.3    # the logistic model being retrained
-pandas>=2.0          # only needed for the real-data windowing
-pyarrow>=14.0       # parquet engine for the TLC files
+scikit-learn>=1.3    # the logistic model being retrained, and OpenML fetch
+pandas>=2.0          # windowing real data
+pyarrow>=14.0        # parquet engine — pandas does not pull this in itself,
+                     # and the NYC TLC files are parquet
