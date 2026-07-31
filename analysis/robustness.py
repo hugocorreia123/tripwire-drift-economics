@@ -17,7 +17,8 @@ error bar.
 This is a robustness grid, not a significance test, and it is labelled
 as such.
 
-    python3 analysis/robustness.py data/elec2_raw.csv
+    python3 analysis/robustness.py electricity
+    python3 analysis/robustness.py covertype
 """
 import argparse
 import itertools
@@ -28,35 +29,18 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from analysis.policies import run_policy, count_fires, DETECTORS
-from analysis.prepare_elec2 import PREDICTORS
+from analysis.prepare_streams import CATALOGUE, fetch, to_windows
 
 
-def windows_from_csv(path, n_windows):
-    import pandas as pd
-    df = pd.read_csv(path)
-    df.columns = [c.lower() for c in df.columns]
-    if "date" in df.columns and "period" in df.columns:
-        df = df.sort_values(["date", "period"]).reset_index(drop=True)
-    cols = [c for c in PREDICTORS if c in df.columns]
-    target = "class" if "class" in df.columns else df.columns[-1]
-    yr = df[target].astype(str).str.lower()
-    y = (yr == yr.value_counts().index[0]).astype(int).to_numpy()
-    X = df[cols].to_numpy(dtype=float)
-    ok = np.isfinite(X).all(axis=1)
-    X, y = X[ok], y[ok]
+def windows_for(name, n_windows):
+    """Rebuild windows at a given count, for any catalogued dataset.
 
-    edges = np.linspace(0, len(X), n_windows + 1).astype(int)
-    first = X[edges[0]:edges[1]]
-    mu, sd = first.mean(axis=0), first.std(axis=0)
-    sd[sd == 0] = 1.0
-    Xs = (X - mu) / sd
-    out = []
-    for i in range(n_windows):
-        lo, hi = edges[i], edges[i + 1]
-        if hi - lo < 100 or len(np.unique(y[lo:hi])) < 2:
-            continue
-        out.append((Xs[lo:hi], y[lo:hi]))
-    return out
+    This was hardcoded to ELEC2's column names, which meant the
+    robustness grid could only ever be run on the one dataset whose
+    result it was supposed to be checking — a fairly circular position.
+    """
+    df = fetch(name)
+    return to_windows(df, CATALOGUE[name]["drop"], n_windows)[0]
 
 
 def threshold_for_count(w, detector, n_target):
@@ -88,10 +72,14 @@ def mean_diff(w, detector, memory, ks=(4, 6, 8, 10)):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("csv")
+    ap.add_argument("dataset", help=f"one of: {', '.join(CATALOGUE)}")
     args = ap.parse_args()
+    if args.dataset not in CATALOGUE:
+        sys.exit(f"unknown dataset '{args.dataset}'; "
+                 f"choose from {', '.join(CATALOGUE)}")
 
-    print("ROBUSTNESS GRID — is C - B an artefact of the analysis choices?")
+    print(f"ROBUSTNESS GRID for '{args.dataset}' — is C - B an artefact")
+    print("of the analysis choices?")
     print("(mean over operating points where retrain counts matched exactly)")
     print("this is a sensitivity check, NOT a confidence interval\n")
     print(f"{'windows':>8} {'detector':>9} {'memory':>7} "
@@ -100,7 +88,7 @@ def main():
 
     results = []
     for nw, det, mem in itertools.product((30, 45, 60), ("ks", "psi"), (2, 3, 5)):
-        w = windows_from_csv(args.csv, nw)
+        w = windows_for(args.dataset, nw)
         d, n = mean_diff(w, det, mem)
         if n == 0:
             print(f"{nw:>8} {det:>9} {mem:>7} {'no match':>10} {0:>7}")

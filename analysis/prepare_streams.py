@@ -47,7 +47,25 @@ CATALOGUE = {
     "poker": dict(openml="poker-hand", version=1,
                   drop=[],
                   note="poker hands; a common streaming benchmark"),
+    # candidates for the CONFIRMATORY set — not used to generate the
+    # hypothesis. Any that OpenML cannot resolve fail gracefully and are
+    # simply skipped; that is preferable to guessing at names.
+    "gas-drift": dict(openml="gas-drift", version=1, drop=[],
+                      note="gas sensor array, drift is the point of it"),
+    "spambase": dict(openml="spambase", version=1, drop=[],
+                     note="spam features; concept moves as spam evolves"),
+    "nomao": dict(openml="nomao", version=1, drop=[],
+                  note="place deduplication, a standard tabular stream"),
+    "shuttle": dict(openml="shuttle", version=1, drop=[],
+                    note="NASA shuttle telemetry, ordered"),
+    "bank-marketing": dict(openml="bank-marketing", version=1, drop=[],
+                           note="campaign outcomes over successive waves"),
 }
+
+# datasets that generated the hypothesis — barred from the confirmatory
+# set by PREREGISTRATION.md, and named here so the bar is enforced in
+# code rather than remembered
+EXPLORATORY = {"electricity", "covertype"}
 
 
 def fetch(name):
@@ -68,6 +86,14 @@ def fetch(name):
     return df
 
 
+def _numeric(df, col):
+    """np.issubdtype RAISES on pandas CategoricalDtype rather than
+    returning False, which killed the airlines load. pandas' own
+    predicate handles every extension dtype."""
+    import pandas as pd
+    return pd.api.types.is_numeric_dtype(df[col])
+
+
 def to_windows(df, drop, n_windows, max_rows=60000):
     target = df.columns[-1]
     y_raw = df[target].astype(str)
@@ -75,8 +101,7 @@ def to_windows(df, drop, n_windows, max_rows=60000):
     y = (y_raw == top).astype(int).to_numpy()
 
     feats = [c for c in df.columns
-             if c != target and c not in drop
-             and np.issubdtype(df[c].dtype, np.number)]
+             if c != target and c not in drop and _numeric(df, c)]
     if len(feats) < 2:
         # one-hot the small categoricals rather than give up
         import pandas as pd
@@ -87,7 +112,7 @@ def to_windows(df, drop, n_windows, max_rows=60000):
                            axis=1)
             feats = [c for c in df.columns
                      if c != target and c not in drop and c not in cats
-                     and np.issubdtype(df[c].dtype, np.number)]
+                     and _numeric(df, c)]
     if len(feats) < 2:
         return None, None, f"only {len(feats)} usable numeric features"
 
@@ -142,6 +167,8 @@ def main():
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--windows", type=int, default=40)
+    ap.add_argument("--confirmatory", action="store_true",
+                    help="only datasets not used to generate the hypothesis")
     args = ap.parse_args()
 
     if args.list:
@@ -150,6 +177,11 @@ def main():
         return
 
     names = list(CATALOGUE) if args.all else [args.name]
+    if args.confirmatory:
+        names = [n for n in (names if args.all else list(CATALOGUE))
+                 if n not in EXPLORATORY]
+        print(f"confirmatory set only — excluding "
+              f"{', '.join(sorted(EXPLORATORY))} per PREREGISTRATION.md\n")
     if names == [None]:
         sys.exit("give a dataset name, or --all, or --list")
 
