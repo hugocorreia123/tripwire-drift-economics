@@ -69,6 +69,10 @@ run and a persistence exclusion was added in response.
 
 ---
 
+<p align="center">
+  <img src="docs/tripwire_policies.png" width="100%">
+</p>
+
 ## The design
 
 ```
